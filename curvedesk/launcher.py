@@ -23,10 +23,14 @@ def main_desktop():
             return response.status==200 and json.loads(response.read(100000)).get('mode')=='Research only'
         except Exception:return False
         finally:connection.close()
-    if healthy():webbrowser.open(url);return
+    if healthy():
+        if os.environ.get('CURVEDESK_NO_BROWSER')!='1':webbrowser.open(url)
+        return
     def open_ready():
         for _ in range(100):
-            if healthy():webbrowser.open(url);return
+            if healthy():
+                if os.environ.get('CURVEDESK_NO_BROWSER')!='1':webbrowser.open(url)
+                return
             time.sleep(.2)
     threading.Thread(target=open_ready,daemon=True).start()
     try:main()
