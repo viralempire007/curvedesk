@@ -1,0 +1,9 @@
+Package: curvedesk
+Version: 0.1.0
+Section: finance
+Priority: optional
+Architecture: amd64
+Maintainer: CurveDesk
+Depends: libc6 (>= 2.35)
+Description: Local commodity spread and ratio research
+ Read-only Dhan market data, quantity-aware spread analytics and manual journal.

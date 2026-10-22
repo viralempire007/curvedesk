@@ -1,0 +1,92 @@
+name: Test and build CurveDesk
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python -m compileall -q curvedesk
+  browser:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements.txt
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/browser.cjs
+  windows:
+    needs: [test, browser]
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements-build.txt
+      - name: Package runtime and assets
+        run: python -m PyInstaller --noconfirm --clean --onedir --windowed --paths . --name CurveDesk --add-data "static;static" --collect-all websockets --collect-all tzdata curvedesk/launcher.py
+      - name: Create installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "packaging\windows.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $file = Get-Item "dist-installer\CurveDesk-Windows-x64-Setup.exe"
+          "$((Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower())  $($file.Name)" | Set-Content "dist-installer\SHA256SUMS.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CurveDesk-Windows-x64
+          path: dist-installer/*
+          if-no-files-found: error
+  ubuntu:
+    needs: [test, browser]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements-build.txt
+      - run: python -m PyInstaller --noconfirm --clean --onedir --windowed --paths . --name CurveDesk --add-data "static:static" --collect-all websockets --collect-all tzdata curvedesk/launcher.py
+      - name: Build Ubuntu deb
+        run: |
+          stage="$RUNNER_TEMP/curvedesk-deb"
+          install -d "$stage/DEBIAN" "$stage/opt/curvedesk" "$stage/usr/share/applications" "$stage/usr/share/icons/hicolor/scalable/apps"
+          cp packaging/control "$stage/DEBIAN/control"
+          cp -a dist/CurveDesk/. "$stage/opt/curvedesk/"
+          cp packaging/curvedesk.desktop "$stage/usr/share/applications/"
+          cp static/icon.svg "$stage/usr/share/icons/hicolor/scalable/apps/curvedesk.svg"
+          dpkg-deb --build --root-owner-group "$stage" dist/CurveDesk-Ubuntu-amd64.deb
+          cd dist
+          sha256sum CurveDesk-Ubuntu-amd64.deb > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CurveDesk-Ubuntu-amd64
+          path: |
+            dist/CurveDesk-Ubuntu-amd64.deb
+            dist/SHA256SUMS.txt
+          if-no-files-found: error

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=CurveDesk
+Comment=Local commodity spread and ratio analytics
+Exec=/opt/curvedesk/CurveDesk
+Icon=curvedesk
+Terminal=false
+Categories=Finance;Office;
